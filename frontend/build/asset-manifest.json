@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/static/css/main.6bf8a29b.css",
-    "main.js": "/static/js/main.27a9cc03.js",
-    "index.html": "/index.html",
-    "main.6bf8a29b.css.map": "/static/css/main.6bf8a29b.css.map",
-    "main.27a9cc03.js.map": "/static/js/main.27a9cc03.js.map"
+    "main.css": "/PulseGrid-Predictive-Maintenance/static/css/main.6bf8a29b.css",
+    "main.js": "/PulseGrid-Predictive-Maintenance/static/js/main.c88167ea.js",
+    "index.html": "/PulseGrid-Predictive-Maintenance/index.html",
+    "main.6bf8a29b.css.map": "/PulseGrid-Predictive-Maintenance/static/css/main.6bf8a29b.css.map",
+    "main.c88167ea.js.map": "/PulseGrid-Predictive-Maintenance/static/js/main.c88167ea.js.map"
   },
   "entrypoints": [
     "static/css/main.6bf8a29b.css",
-    "static/js/main.27a9cc03.js"
+    "static/js/main.c88167ea.js"
   ]
 }
