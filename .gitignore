@@ -1,0 +1,29 @@
+﻿# Dependencies
+node_modules/
+**/node_modules/
+
+# Python vendor cache
+.vendor/
+__pycache__/
+
+# Logs
+*.log
+*.err
+*.out
+frontend.log
+frontend.err
+backend.log
+backend.err
+startup.out.log
+startup.err.log
+
+# Build cache / temp
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+backend/.env
+
+# Optional local artifacts
+compiled_release/backend/node_modules/
