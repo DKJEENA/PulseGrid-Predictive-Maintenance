@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+
+# Databases
+*.db
+*.sqlite3
+
+# Node / JS
+node_modules/
+dist/
+build/
+.env
+
+# MacOS
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+
+# Project specific
+Predictive_Maintenance_Presentation.pptx
