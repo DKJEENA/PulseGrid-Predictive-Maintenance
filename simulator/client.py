@@ -118,12 +118,12 @@ class IoTDevice:
         
         if self.tool_wear > 250:
             self.tool_wear = random.uniform(0, 10)
-            print(f"   🔧 {self.machine_id}: Tool replaced")
+            print(f"   [*] {self.machine_id}: Tool replaced")
         
         if not self.fault_mode and random.random() < 0.02:
             self.fault_mode = True
             self.fault_duration = random.randint(3, 8)
-            print(f"   ⚡ {self.machine_id}: RANDOM FAULT INJECTED")
+            print(f"   [!] {self.machine_id}: RANDOM FAULT INJECTED")
             
         if self.fault_mode:
             air_temp += random.uniform(8, 15)
@@ -132,7 +132,7 @@ class IoTDevice:
             self.fault_duration -= 1
             if self.fault_duration <= 0:
                 self.fault_mode = False
-                print(f"   ✅ {self.machine_id}: Fault resolved")
+                print(f"   [OK] {self.machine_id}: Fault resolved")
                 
         return {
             'machine_id': self.machine_id,
