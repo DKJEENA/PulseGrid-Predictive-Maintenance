@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 // --- API base URL ---
-const API = 'http://localhost:8000';
+import { API } from './config';
 
 export default function Calibration() {
   // --- State ---

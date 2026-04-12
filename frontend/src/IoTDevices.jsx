@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Radio, Zap, ServerOff, Wifi, AlertTriangle, StopCircle } from 'lucide-react';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
-const API = 'http://localhost:8000';
+import { API, WS_URL } from './config';
 
 export default function IoTDevices() {
   const [devices, setDevices] = useState([]);
@@ -31,7 +31,7 @@ export default function IoTDevices() {
 
   // WebSocket Connection
   useEffect(() => {
-    ws.current = new WebSocket(`ws://localhost:8000/ws/live`);
+    ws.current = new WebSocket(WS_URL);
     
     ws.current.onopen = () => setWsStatus('connected');
     ws.current.onclose = () => setWsStatus('disconnected');

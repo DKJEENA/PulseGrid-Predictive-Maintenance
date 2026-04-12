@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 
 // --- API base URL ---
-const API = 'http://localhost:8000';
+import { API } from './config';
 
 // --- Sensor display configuration ---
 const SENSORS = [

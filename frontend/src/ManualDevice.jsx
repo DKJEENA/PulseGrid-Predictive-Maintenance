@@ -22,7 +22,7 @@ import {
   AlertTriangle, CheckCircle, Send, RotateCcw, Play, Pause
 } from 'lucide-react';
 
-const API = 'http://localhost:8000';
+import { API } from './config';
 
 // Sensor ranges — min, max, default, danger threshold
 const SENSORS = {

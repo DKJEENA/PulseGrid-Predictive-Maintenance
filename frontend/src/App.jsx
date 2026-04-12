@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 
 // --- API base URL (change for production) ---
-const API = 'http://localhost:8000';
+import { API } from './config';
 
 /**
  * Tab configuration — defines all navigation items

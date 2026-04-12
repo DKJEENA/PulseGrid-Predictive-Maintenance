@@ -10,9 +10,14 @@ COPY backend /app/backend
 COPY ml /app/ml
 COPY dataset /app/dataset
 
-# Hugging Face runs with a non-root user (id 1000). 
-# We must ensure the user has permission to write to /app (for SQLite db creation)
-RUN mkdir -p /app/backend && chmod -R 777 /app
+# Train the model at build time
+RUN cd ml && python train_model.py
 
-EXPOSE 7860
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Ensure write permissions for SQLite db and logs
+RUN chmod -R 777 /app
+
+EXPOSE 8000
+
+# Run from backend/ directory so relative imports work
+WORKDIR /app/backend
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

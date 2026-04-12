@@ -1,9 +1,30 @@
 services:
+  # Backend API (FastAPI + ML + SQLite)
   - type: web
     name: pulsegrid-backend
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    runtime: python
+    buildCommand: |
+      pip install -r requirements.txt
+      cd ml && python train_model.py && cd ..
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.0
+        value: "3.11.0"
+      - key: ALLOWED_ORIGINS
+        value: "https://dkjeena.github.io,http://localhost:5173"
+      - key: DATASET_PATH
+        value: "../dataset/ai4i2020.csv"
+
+  # Frontend (Static Site served from Vite build)
+  - type: web
+    name: pulsegrid-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+    envVars:
+      - key: VITE_API_URL
+        value: "https://pulsegrid-backend.onrender.com"
