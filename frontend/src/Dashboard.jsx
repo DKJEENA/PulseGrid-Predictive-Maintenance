@@ -12,11 +12,11 @@
  * ==========================================================================
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import {
   Activity, Thermometer, Gauge, Zap, AlertTriangle,
-  CheckCircle2, AlertCircle, XCircle, Server
+  CheckCircle2, AlertCircle, XCircle, Server, RefreshCw
 } from 'lucide-react';
 import {
   LineChart, Line, YAxis, ResponsiveContainer
@@ -25,12 +25,16 @@ import {
 // --- API base URL ---
 const API = 'http://localhost:8000';
 
+const REFRESH_INTERVAL = 3; // seconds
+
 export default function Dashboard({ onMachineSelect }) {
   // --- State ---
   const [machines, setMachines] = useState([]);       // List of machines with status
   const [historyMap, setHistoryMap] = useState({});    // Sparkline data per machine
   const [loading, setLoading] = useState(true);        // Initial loading state
   const [alertSummary, setAlertSummary] = useState({}); // Alert count breakdown
+  const [countdown, setCountdown] = useState(REFRESH_INTERVAL); // Refresh timer
+  const countdownRef = useRef(null);
 
   /**
    * Fetch all machine data and alert summary from the API.
@@ -69,8 +73,18 @@ export default function Dashboard({ onMachineSelect }) {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 3000);
+    const interval = setInterval(fetchData, REFRESH_INTERVAL * 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  /**
+   * Countdown timer — visual feedback for auto-refresh cycle
+   */
+  useEffect(() => {
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => (prev <= 1 ? REFRESH_INTERVAL : prev - 1));
+    }, 1000);
+    return () => clearInterval(countdownRef.current);
   }, []);
 
   /**
@@ -161,21 +175,47 @@ export default function Dashboard({ onMachineSelect }) {
         <h3 className="section-title">
           <Activity size={18} /> Machine Fleet
         </h3>
-        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-          {alertSummary.active || 0} active alerts
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            {alertSummary.active || 0} active alerts
+          </span>
+          <div className="refresh-timer">
+            <RefreshCw size={12} className={loading ? 'spin' : ''} />
+            <div className="refresh-bar">
+              <div
+                className="refresh-bar-fill"
+                style={{ width: `${(countdown / REFRESH_INTERVAL) * 100}%` }}
+              />
+            </div>
+            <span>{countdown}s</span>
+          </div>
+        </div>
       </div>
 
       {/* ================================================================
           MACHINE CARDS GRID
           ================================================================ */}
       {loading && machines.length === 0 ? (
-        <div className="empty-state">
-          <Server size={48} />
-          <h3>Connecting to Backend...</h3>
-          <p>
-            Start the FastAPI backend and run the simulator to see machine data here.
-          </p>
+        <div className="machines-grid">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="skeleton-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                <div>
+                  <div className="skeleton-line medium" style={{ width: '120px', height: '16px' }} />
+                  <div className="skeleton-line short" style={{ width: '80px', height: '12px', marginTop: '0.5rem' }} />
+                </div>
+                <div className="skeleton-line" style={{ width: '70px', height: '24px', borderRadius: '999px' }} />
+              </div>
+              <div className="skeleton-line xl" />
+              <div className="skeleton-line long" style={{ height: '60px', marginBottom: '1.25rem' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                <div className="skeleton-line" style={{ height: '32px' }} />
+                <div className="skeleton-line" style={{ height: '32px' }} />
+                <div className="skeleton-line" style={{ height: '32px' }} />
+                <div className="skeleton-line" style={{ height: '32px' }} />
+              </div>
+            </div>
+          ))}
         </div>
       ) : machines.length === 0 ? (
         <div className="empty-state">

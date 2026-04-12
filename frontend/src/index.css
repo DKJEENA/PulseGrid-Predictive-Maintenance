@@ -1326,7 +1326,328 @@ body::before {
 }
 
 /* ==========================================================================
-   RESPONSIVE
+   RANGE SLIDER — Custom dark-theme slider for ManualDevice
+   ========================================================================== */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: 3px solid var(--accent-blue);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, border-color 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: 3px solid var(--accent-blue);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   BUTTON VARIANTS — Small, outline, and grouped controls
+   ========================================================================== */
+.btn-sm, .btn.btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.btn-outline, .btn.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btn-outline:hover, .btn.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+.trend-controls {
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.trend-btn {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-right: 1px solid var(--border-color);
+}
+
+.trend-btn:last-child {
+  border-right: none;
+}
+
+.trend-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.trend-btn.active {
+  background: var(--accent-blue);
+  color: white;
+}
+
+
+/* ==========================================================================
+   LOADING SKELETON — Pulse animation for loading states
+   ========================================================================== */
+@keyframes skeleton-pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.4; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1.75rem;
+  min-height: 280px;
+}
+
+.skeleton-line {
+  height: 14px;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.skeleton-line.short { width: 40%; }
+.skeleton-line.medium { width: 65%; }
+.skeleton-line.long { width: 90%; }
+.skeleton-line.xl { height: 48px; width: 30%; margin-bottom: 1.25rem; }
+
+/* ==========================================================================
+   GLOBAL SCROLLBAR STYLING — Dark theme scrollbars
+   ========================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ==========================================================================
+   IOT DEVICES — Pulse dot and device-specific styles
+   ========================================================================== */
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.pulse-dot.online {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+
+.pulse-dot.online::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-green);
+  animation: iot-pulse-ring 2s ease-out infinite;
+}
+
+@keyframes iot-pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.pulse-dot.offline {
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* Radial gauge styles for IoT dashboard */
+.radial-gauge {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  transition: border-color var(--transition-smooth);
+}
+
+.radial-gauge:hover {
+  border-color: var(--accent-blue);
+}
+
+/* ==========================================================================
+   AUTO-REFRESH TIMER — Visual countdown for dashboard
+   ========================================================================== */
+.refresh-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.refresh-bar {
+  width: 60px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.refresh-bar-fill {
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+/* ==========================================================================
+   FEATURE IMPORTANCE — Bar chart for model explainability
+   ========================================================================== */
+.importance-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.importance-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.importance-label {
+  width: 180px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.importance-track {
+  flex: 1;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.importance-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 2px;
+}
+
+.importance-value {
+  width: 50px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   BUTTON VARIANTS — Warning and Danger fills
+   ========================================================================== */
+.btn.warning {
+  background: var(--accent-yellow);
+  color: #000;
+  box-shadow: 0 4px 14px var(--accent-yellow-glow);
+}
+
+.btn.warning:hover:not(:disabled) {
+  background: #e68a00;
+}
+
+.btn.danger {
+  background: var(--accent-red);
+  box-shadow: 0 4px 14px var(--accent-red-glow);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+/* ==========================================================================
+   RESPONSIVE — Tablet & Mobile breakpoints
    ========================================================================== */
 @media (max-width: 1200px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1335,9 +1656,105 @@ body::before {
   .metrics-cards { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 768px) {
-  .sidebar { display: none; }
-  .kpi-grid { grid-template-columns: 1fr; }
-  .machines-grid { grid-template-columns: 1fr; }
-  .content-wrapper { padding: 1rem; }
+@media (max-width: 900px) {
+  :root {
+    --sidebar-width: 220px;
+  }
+
+  .nav-item {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  .sidebar-header h1 {
+    font-size: 1rem;
+  }
+
+  .content-wrapper {
+    padding: 1.25rem 1rem;
+  }
+
+  .topbar {
+    padding: 0 1.25rem;
+  }
+
+  .page-title {
+    font-size: 1rem;
+  }
+
+  .calibration-grid {
+    grid-template-columns: 1fr;
+  }
 }
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    bottom: 0;
+    z-index: 100;
+    transition: left var(--transition-smooth);
+    width: 260px;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .machines-grid { grid-template-columns: 1fr; }
+  .content-wrapper { padding: 1rem 0.75rem; }
+
+  .topbar {
+    padding: 0 1rem;
+  }
+
+  .machine-card {
+    padding: 1.25rem;
+  }
+
+  .health-score {
+    font-size: 2.25rem;
+  }
+
+  .chat-container {
+    height: calc(100vh - var(--topbar-height) - 2rem);
+    border-radius: 12px;
+  }
+
+  .importance-label {
+    width: 120px;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+
+  .kpi-card {
+    padding: 1rem;
+  }
+
+  .kpi-value {
+    font-size: 1.5rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .metrics-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-actions {
+    gap: 0.5rem;
+  }
+}
+

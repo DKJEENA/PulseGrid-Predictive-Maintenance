@@ -1,6 +1,9 @@
 version: '3.8'
 
 services:
+  # ==========================================================================
+  # Backend — FastAPI with ML inference, alerts, and WebSocket support
+  # ==========================================================================
   backend:
     build:
       context: .
@@ -11,9 +14,24 @@ services:
       - ./backend:/app/backend
       - ./ml:/app/ml
       - ./dataset:/app/dataset
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///backend/iot_data.db}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-30}
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: always
 
+  # ==========================================================================
+  # Frontend — Vite React dev server
+  # ==========================================================================
   frontend:
     build:
       context: ./frontend
@@ -23,4 +41,7 @@ services:
     volumes:
       - ./frontend/src:/app/src
     command: npm run dev -- --host
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: always

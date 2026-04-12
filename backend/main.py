@@ -16,6 +16,8 @@ REST API endpoints for:
 
 from fastapi import FastAPI, UploadFile, File, Depends, BackgroundTasks, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from pydantic import BaseModel
@@ -24,7 +26,10 @@ import shutil
 import os
 import subprocess
 import json
+import logging
+import time as _time
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 # --- Local module imports ---
 from database import SessionLocal, SensorData, Alert, ModelMetrics, CalibrationConfig, get_db
@@ -32,8 +37,36 @@ from ml_service import predict_machine_health, get_model_metrics, check_model_dr
 from alert_engine import evaluate_sensor_reading, get_recommendation_for_reading
 from chatbot_engine import ChatbotEngine
 from data_pipeline import run_full_pipeline, generate_column_stats
+from websocket_manager import manager as ws_manager
+from fastapi import WebSocket, WebSocketDisconnect
 
 import pandas as pd
+
+# ===========================================================================
+# LOGGING CONFIGURATION — Replace print() with structured logging
+# ===========================================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(
+            os.path.join(os.path.dirname(__file__), 'server.log'),
+            encoding='utf-8'
+        ),
+    ],
+)
+logger = logging.getLogger("pulsegrid")
+
+# ===========================================================================
+# ENVIRONMENT CONFIGURATION
+# ===========================================================================
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
+).split(",")
+DATA_RETENTION_DAYS = int(os.getenv("DATA_RETENTION_DAYS", "30"))
+RATE_LIMIT_PER_SECOND = int(os.getenv("RATE_LIMIT_PER_SECOND", "10"))
 
 # ===========================================================================
 # APP INITIALIZATION
@@ -41,22 +74,53 @@ import pandas as pd
 app = FastAPI(
     title="Predictive Maintenance API",
     description="IIoT Predictive Maintenance Platform with ML-powered failure prediction",
-    version="2.0.0"
+    version="2.1.0"
 )
 
-# Enable CORS for React frontend (restrict origins in production)
+# Enable CORS for React frontend — origins loaded from ALLOWED_ORIGINS env var
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ===========================================================================
+# GLOBAL EXCEPTION HANDLER — Clean 500 responses
+# ===========================================================================
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch unhandled exceptions and return a clean JSON error."""
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Check server logs for details."},
+    )
+
+# ===========================================================================
+# RATE LIMITER — In-memory per-machine rate limiting for /api/simulate
+# ===========================================================================
+_rate_buckets: dict = defaultdict(list)
+
+def _check_rate_limit(machine_id: str) -> bool:
+    """Returns True if the request should be allowed, False if rate-limited."""
+    now = _time.time()
+    window = _rate_buckets[machine_id]
+    # Remove timestamps outside the 1-second window
+    _rate_buckets[machine_id] = [t for t in window if now - t < 1.0]
+    if len(_rate_buckets[machine_id]) >= RATE_LIMIT_PER_SECOND:
+        return False
+    _rate_buckets[machine_id].append(now)
+    return True
+
 # ---------------------------------------------------------------------------
 # Initialize the AI Chatbot with the default dataset
 # ---------------------------------------------------------------------------
-DATASET_PATH = os.path.join(os.path.dirname(__file__), '../dataset/ai4i2020.csv')
+DATASET_PATH = os.getenv(
+    "DATASET_PATH",
+    os.path.join(os.path.dirname(__file__), '../dataset/ai4i2020.csv')
+)
 chatbot = ChatbotEngine(DATASET_PATH)
 
 
@@ -92,19 +156,67 @@ class CalibrationUpdate(BaseModel):
 
 
 # ===========================================================================
+# DEVICE REGISTRY (In-Memory for Simulator)
+# ===========================================================================
+# In a real app this would be in Redis or DB with active connection checking
+active_devices = {}
+
+# ===========================================================================
 # ROOT ENDPOINT
 # ===========================================================================
 @app.get("/")
 def read_root():
     """Health check endpoint — confirms API is running."""
     return {
-        "message": "Predictive Maintenance API v2.0 is running",
+        "message": "Predictive Maintenance API v2.1 is running",
         "status": "online",
         "endpoints": [
             "/api/machines", "/api/alerts", "/api/chatbot",
-            "/api/model/metrics", "/api/upload_dataset"
+            "/api/model/metrics", "/api/upload_dataset",
+            "/api/health"
         ]
     }
+
+
+@app.get("/api/health")
+def health_check(db: Session = Depends(get_db)):
+    """
+    Comprehensive health check — verifies DB, model, and dataset status.
+    Returns HTTP 200 if healthy, 503 if degraded.
+    """
+    from ml_service import model as ml_model
+
+    checks = {}
+    healthy = True
+
+    # DB check
+    try:
+        db.execute(func.count(SensorData.id)).scalar()
+        checks['database'] = {'status': 'ok'}
+    except Exception as e:
+        checks['database'] = {'status': 'error', 'detail': str(e)}
+        healthy = False
+
+    # Model check
+    checks['ml_model'] = {
+        'status': 'ok' if ml_model is not None else 'not_loaded',
+        'loaded': ml_model is not None,
+    }
+    if ml_model is None:
+        healthy = False
+
+    # Dataset check
+    dataset_exists = os.path.exists(DATASET_PATH)
+    checks['dataset'] = {
+        'status': 'ok' if dataset_exists else 'missing',
+        'path': DATASET_PATH,
+    }
+
+    status_code = 200 if healthy else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={'healthy': healthy, 'checks': checks, 'version': '2.1.0'},
+    )
 
 
 # ===========================================================================
@@ -275,13 +387,20 @@ def get_machine_trends(machine_id: str, db: Session = Depends(get_db)):
 # SENSOR DATA INGESTION ENDPOINT
 # ===========================================================================
 @app.post("/api/simulate")
-def simulate_reading(reading: SimulateReading, db: Session = Depends(get_db)):
+async def simulate_reading(reading: SimulateReading, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Ingest a sensor reading — runs ML prediction, generates alerts,
     and stores everything in the database.
     
     Used by the simulator or real MQTT bridge to push data.
     """
+    # Rate limiting check
+    if not _check_rate_limit(reading.machine_id):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded for machine '{reading.machine_id}'. Max {RATE_LIMIT_PER_SECOND} req/s."
+        )
+
     # Step 1: Prepare features for ML model
     features = {
         'Type': reading.type,
@@ -344,6 +463,24 @@ def simulate_reading(reading: SimulateReading, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(record)
     
+    # Broadcast to WebSocket clients *after* DB commit
+    output_payload = {
+        "type": "live_reading",
+        "data": {
+            "machine_id": reading.machine_id,
+            "air_temp": reading.air_temp,
+            "process_temp": reading.process_temp,
+            "rpm": reading.rpm,
+            "torque": reading.torque,
+            "tool_wear": reading.tool_wear,
+            "health_score": health_score,
+            "failure_risk": failure_risk,
+            "prediction": "FAILURE_RISK" if failure_risk else "HEALTHY",
+            "timestamp": record.timestamp.isoformat()
+        }
+    }
+    background_tasks.add_task(ws_manager.broadcast_json, output_payload)
+    
     return {
         "status": "success",
         "health_score": health_score,
@@ -352,6 +489,87 @@ def simulate_reading(reading: SimulateReading, db: Session = Depends(get_db)):
         "recommendation": recommendation,
         "alerts_generated": len(alerts_data),
     }
+
+# ===========================================================================
+# IOT DEVICE ENDPOINTS AND WEBSOCKET
+# ===========================================================================
+@app.websocket("/ws/live")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time sensor data streaming to frontend."""
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            # We just keep connection open, client doesn't send messages usually
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+
+@app.post("/api/iot/devices/register")
+def register_device(device_info: dict):
+    """Registers a virtual IoT device from the simulator."""
+    machine_id = device_info.get("machine_id")
+    if not machine_id:
+        raise HTTPException(status_code=400, detail="machine_id required")
+        
+    active_devices[machine_id] = {
+        "machine_id": machine_id,
+        "profile": device_info.get("profile", "Generic Device"),
+        "ip": device_info.get("ip", "127.0.0.1"),
+        "last_heartbeat": datetime.utcnow().isoformat(),
+        "status": "online",
+        "fault_mode": False
+    }
+    return {"status": "registered", "machine_id": machine_id}
+
+@app.post("/api/iot/devices/{machine_id}/heartbeat")
+def device_heartbeat(machine_id: str):
+    """Heartbeat endpoint to keep device active."""
+    if machine_id in active_devices:
+        active_devices[machine_id]["last_heartbeat"] = datetime.utcnow().isoformat()
+        active_devices[machine_id]["status"] = "online"
+        return {"status": "ok"}
+    return {"status": "not_found"}, 404
+
+@app.get("/api/iot/devices")
+def get_devices():
+    """Get all registered active devices."""
+    # Cleanup stale devices (no heartbeat in > 15s)
+    now = datetime.utcnow()
+    for mid, info in list(active_devices.items()):
+        hb = datetime.fromisoformat(info["last_heartbeat"])
+        if (now - hb).total_seconds() > 15:
+            info["status"] = "offline"
+    return list(active_devices.values())
+
+@app.post("/api/iot/devices/{machine_id}/command")
+def send_device_command(machine_id: str, payload: dict):
+    """Send a command (like start/stop/inject_fault) to a device."""
+    if machine_id not in active_devices:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    # Standardize commands
+    command = payload.get("command")
+    
+    # Store the pending command in the device registry so it can poll it
+    active_devices[machine_id]["pending_command"] = command
+    
+    # If it's a fault injection, temporarily update the status in registry
+    if command == "inject_fault":
+         active_devices[machine_id]["fault_mode"] = True
+    elif command == "resolve_fault":
+         active_devices[machine_id]["fault_mode"] = False
+         
+    return {"status": "command_queued", "machine_id": machine_id, "command": command}
+
+@app.get("/api/iot/devices/{machine_id}/poll_command")
+def poll_device_command(machine_id: str):
+    """Endpoint for device to poll for pending commands."""
+    if machine_id in active_devices:
+        cmd = active_devices[machine_id].get("pending_command")
+        if cmd:
+            active_devices[machine_id]["pending_command"] = None
+            return {"command": cmd}
+    return {"command": None}
 
 
 # ===========================================================================
@@ -510,16 +728,16 @@ def model_drift(db: Session = Depends(get_db)):
 def run_training_task():
     """Background task to run the ML training pipeline and reload model."""
     script_path = os.path.join(os.path.dirname(__file__), '../ml/train_model.py')
-    print("[RETRAIN] Starting automated retraining...")
+    logger.info("[RETRAIN] Starting automated retraining...")
     try:
         subprocess.run(["python", script_path], check=True, cwd=os.path.dirname(script_path))
-        print("[OK] Retraining completed.")
+        logger.info("[RETRAIN] Retraining completed successfully.")
         # Hot-reload the model so API uses the new one immediately
         reload_model()
         # Reload chatbot dataset
         chatbot.load_dataset(DATASET_PATH)
     except Exception as e:
-        print(f"[ERROR] Retraining failed: {e}")
+        logger.error(f"[RETRAIN] Retraining failed: {e}", exc_info=True)
 
 
 @app.post("/api/upload_dataset")
@@ -538,7 +756,7 @@ def upload_dataset(background_tasks: BackgroundTasks, file: UploadFile = File(..
     with open(dataset_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    print(f"[FILE] New dataset saved: {file.filename} -> {dataset_path}")
+    logger.info(f"[FILE] New dataset saved: {file.filename} -> {dataset_path}")
     
     # Run quick data quality check
     try:
@@ -678,8 +896,9 @@ def update_calibration(machine_id: str, update: CalibrationUpdate, db: Session =
 # BACKWARD COMPATIBILITY — Support old endpoint
 # ===========================================================================
 @app.post("/api/simulate_reading")
-def simulate_reading_legacy(
-    machine_id: str,
+async def simulate_reading_legacy(
+    background_tasks: BackgroundTasks,
+    machine_id: str = "",
     type: int = 1,
     air_temp: float = 300.0,
     process_temp: float = 310.0,
@@ -695,4 +914,41 @@ def simulate_reading_legacy(
         process_temp=process_temp, rpm=rpm, torque=torque,
         tool_wear=tool_wear, rnf=rnf
     )
-    return simulate_reading(reading, db)
+    return await simulate_reading(reading, background_tasks, db)
+
+
+# ===========================================================================
+# DATA RETENTION — Cleanup old sensor data
+# ===========================================================================
+@app.post("/api/admin/cleanup")
+def cleanup_old_data(days: int = Query(default=None), db: Session = Depends(get_db)):
+    """
+    Remove sensor readings and resolved alerts older than N days.
+    Uses DATA_RETENTION_DAYS env var if 'days' is not provided.
+    """
+    retention = days if days is not None else DATA_RETENTION_DAYS
+    cutoff = datetime.utcnow() - timedelta(days=retention)
+
+    # Delete old sensor readings
+    sensor_deleted = (
+        db.query(SensorData)
+        .filter(SensorData.timestamp < cutoff)
+        .delete(synchronize_session=False)
+    )
+
+    # Delete old resolved alerts
+    alert_deleted = (
+        db.query(Alert)
+        .filter(Alert.resolved == True, Alert.timestamp < cutoff)
+        .delete(synchronize_session=False)
+    )
+
+    db.commit()
+    logger.info(f"[CLEANUP] Removed {sensor_deleted} sensor readings and {alert_deleted} alerts older than {retention} days.")
+
+    return {
+        'status': 'ok',
+        'retention_days': retention,
+        'sensor_readings_deleted': sensor_deleted,
+        'alerts_deleted': alert_deleted,
+    }

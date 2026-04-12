@@ -16,7 +16,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
   ArrowLeft, Thermometer, Gauge, Zap, Activity,
-  Clock, AlertTriangle, CheckCircle
+  Clock, AlertTriangle, CheckCircle, Download
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -31,6 +31,15 @@ export default function MachineDetail({ machineId, onBack }) {
   const [status, setStatus] = useState(null);           // Latest sensor reading
   const [history, setHistory] = useState([]);            // Historical readings for charts
   const [loading, setLoading] = useState(true);          // Loading indicator
+  const [timeRange, setTimeRange] = useState(100);       // Number of readings to fetch
+
+  const TIME_RANGES = [
+    { label: '50', value: 50 },
+    { label: '100', value: 100 },
+    { label: '200', value: 200 },
+    { label: '500', value: 500 },
+    { label: '1000', value: 1000 },
+  ];
 
   /**
    * Fetch machine status and history from the API.
@@ -46,7 +55,7 @@ export default function MachineDetail({ machineId, onBack }) {
         setStatus(statusRes.data);
 
         // Get historical data for charts
-        const histRes = await axios.get(`${API}/api/machines/${machineId}/history?limit=100`);
+        const histRes = await axios.get(`${API}/api/machines/${machineId}/history?limit=${timeRange}`);
         setHistory(histRes.data);
 
         setLoading(false);
@@ -59,7 +68,31 @@ export default function MachineDetail({ machineId, onBack }) {
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [machineId]);
+  }, [machineId, timeRange]);
+
+  /**
+   * Export history data as CSV file download
+   */
+  const exportCSV = () => {
+    if (!history.length) return;
+    const headers = ['timestamp', 'air_temp', 'process_temp', 'rpm', 'torque', 'tool_wear', 'health_score', 'failure_risk'];
+    const csvRows = [
+      headers.join(','),
+      ...history.map(row =>
+        headers.map(h => {
+          const val = row[h];
+          return typeof val === 'number' ? val.toFixed(4) : (val || '');
+        }).join(',')
+      )
+    ];
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${machineId}_history_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   /**
    * Determine health status styling
@@ -134,9 +167,27 @@ export default function MachineDetail({ machineId, onBack }) {
             Last updated: {status?.timestamp ? new Date(status.timestamp).toLocaleString() : 'N/A'}
           </span>
         </div>
-        <span className={`badge ${healthStyle.class === 'good' ? 'healthy' : (healthStyle.class === 'bad' ? 'danger' : 'warning')}`} style={{ marginLeft: 'auto' }}>
-          {healthStyle.label}
-        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {/* Time range selector */}
+          <div className="trend-controls">
+            {TIME_RANGES.map(r => (
+              <button
+                key={r.value}
+                className={`trend-btn ${timeRange === r.value ? 'active' : ''}`}
+                onClick={() => setTimeRange(r.value)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          {/* Export CSV button */}
+          <button className="btn btn-sm btn-outline" onClick={exportCSV} disabled={!history.length} title="Export history as CSV">
+            <Download size={14} /> CSV
+          </button>
+          <span className={`badge ${healthStyle.class === 'good' ? 'healthy' : (healthStyle.class === 'bad' ? 'danger' : 'warning')}`}>
+            {healthStyle.label}
+          </span>
+        </div>
       </div>
 
       {/* ================================================================

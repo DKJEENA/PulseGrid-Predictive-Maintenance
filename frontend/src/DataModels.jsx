@@ -123,7 +123,7 @@ export default function DataModels() {
         )}
       </div>
 
-      <div className="metrics-cards" style={{ marginBottom: '2rem' }}>
+      <div className="metrics-cards" style={{ marginBottom: '2rem', gridTemplateColumns: 'repeat(5, 1fr)' }}>
         {/* Accuracy */}
         <div className="metric-card">
           <div className="metric-value" style={{ color: 'var(--accent-green)' }}>
@@ -155,7 +155,44 @@ export default function DataModels() {
           </div>
           <div className="metric-label">F1 Score</div>
         </div>
+
+        {/* AUC-ROC */}
+        <div className="metric-card">
+          <div className="metric-value" style={{ color: 'var(--accent-cyan)' }}>
+            {metrics?.auc_roc ? (metrics.auc_roc * 100).toFixed(1) : '--'}%
+          </div>
+          <div className="metric-label">AUC-ROC</div>
+        </div>
       </div>
+
+      {/* Cross-validation stats */}
+      {metrics?.cv_f1_mean != null && (
+        <div className="glass-panel" style={{ marginBottom: '2rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>5-Fold Cross Validation</strong>
+          </div>
+          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CV F1 Mean</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: 'var(--accent-blue-light)' }}>
+                {(metrics.cv_f1_mean * 100).toFixed(2)}%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CV F1 Std</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: 'var(--text-secondary)' }}>
+                ±{(metrics.cv_f1_std * 100).toFixed(2)}%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CV Accuracy</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: 'var(--accent-green)' }}>
+                {(metrics.cv_accuracy_mean * 100).toFixed(2)}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Model info panel */}
       {metrics && (
@@ -221,6 +258,33 @@ export default function DataModels() {
                 <div style={{ padding: '0.5rem 1rem', textAlign: 'center', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
                   {metrics.confusion_matrix[1]?.[1] || 0}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Feature Importance Chart */}
+          {metrics.feature_importances && Object.keys(metrics.feature_importances).length > 0 && (
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '1rem' }}>
+                Feature Importance (Random Forest)
+              </div>
+              <div className="importance-bar-container">
+                {(() => {
+                  const entries = Object.entries(metrics.feature_importances);
+                  const maxVal = Math.max(...entries.map(([, v]) => v));
+                  return entries.map(([feature, importance]) => (
+                    <div key={feature} className="importance-row">
+                      <div className="importance-label" title={feature}>{feature}</div>
+                      <div className="importance-track">
+                        <div
+                          className="importance-fill"
+                          style={{ width: `${(importance / maxVal) * 100}%` }}
+                        />
+                      </div>
+                      <div className="importance-value">{(importance * 100).toFixed(1)}%</div>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           )}

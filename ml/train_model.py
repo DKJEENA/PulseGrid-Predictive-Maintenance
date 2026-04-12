@@ -22,17 +22,22 @@ import pandas as pd
 import numpy as np
 import os
 import json
+import logging
 from datetime import datetime
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
-    f1_score, confusion_matrix, classification_report
+    f1_score, confusion_matrix, classification_report,
+    roc_auc_score
 )
 import joblib
+
+logger = logging.getLogger("pulsegrid.train")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # ---------------------------------------------------------------------------
 # File paths — Change DATASET_PATH to use a different dataset
@@ -167,19 +172,51 @@ def train():
     f1 = f1_score(y_test, y_pred, zero_division=0)
     cm = confusion_matrix(y_test, y_pred).tolist()
     
+    # ROC-AUC score (uses probability of failure class)
+    y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
+    try:
+        auc_roc = roc_auc_score(y_test, y_pred_proba)
+    except ValueError:
+        auc_roc = 0.0  # Only one class present in test set
+    
     print(f"   Accuracy:  {accuracy:.4f} ({accuracy*100:.2f}%)")
     print(f"   Precision: {precision:.4f}")
     print(f"   Recall:    {recall:.4f}")
     print(f"   F1 Score:  {f1:.4f}")
+    print(f"   AUC-ROC:   {auc_roc:.4f}")
     print(f"   Confusion Matrix: {cm}")
     print(f"\n{classification_report(y_test, y_pred, target_names=['Healthy', 'Failure'])}")
+    
+    # ===================================================================
+    # STEP 7b: Cross-validation for reliable estimates
+    # ===================================================================
+    print("\n🔄 Running 5-fold stratified cross-validation...")
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv_scores = cross_val_score(pipeline, X, y, cv=cv, scoring='f1')
+    cv_accuracy = cross_val_score(pipeline, X, y, cv=cv, scoring='accuracy')
+    print(f"   CV F1 Scores:       {[f'{s:.4f}' for s in cv_scores]}")
+    print(f"   CV F1 Mean ± Std:   {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+    print(f"   CV Accuracy Mean:   {cv_accuracy.mean():.4f} ± {cv_accuracy.std():.4f}")
+    
+    # ===================================================================
+    # STEP 7c: Extract feature importances
+    # ===================================================================
+    print("\n📊 Feature Importances:")
+    rf_classifier = pipeline.named_steps['classifier']
+    importances = rf_classifier.feature_importances_
+    feature_importance = dict(zip(list(X.columns), [round(float(v), 4) for v in importances]))
+    # Sort by importance descending
+    feature_importance = dict(sorted(feature_importance.items(), key=lambda x: x[1], reverse=True))
+    for feat, imp in feature_importance.items():
+        bar = '█' * int(imp * 50)
+        print(f"   {feat:30s} {imp:.4f} {bar}")
     
     # ===================================================================
     # STEP 8: Save model and metrics
     # ===================================================================
     # Save trained model
     joblib.dump(pipeline, MODEL_SAVE_PATH)
-    print(f"💾 Model saved to: {MODEL_SAVE_PATH}")
+    print(f"\n💾 Model saved to: {MODEL_SAVE_PATH}")
     
     # Save evaluation metrics for the dashboard
     metrics = {
@@ -187,9 +224,14 @@ def train():
         'precision': round(precision, 4),
         'recall': round(recall, 4),
         'f1_score': round(f1, 4),
+        'auc_roc': round(auc_roc, 4),
+        'cv_f1_mean': round(float(cv_scores.mean()), 4),
+        'cv_f1_std': round(float(cv_scores.std()), 4),
+        'cv_accuracy_mean': round(float(cv_accuracy.mean()), 4),
         'confusion_matrix': cm,
         'dataset_size': len(df),
         'feature_names': list(X.columns),
+        'feature_importances': feature_importance,
         'trained_at': datetime.utcnow().isoformat(),
         'training_samples': len(X_train),
         'test_samples': len(X_test),

@@ -27,3 +27,5 @@ build/
 
 # Project specific
 Predictive_Maintenance_Presentation.pptx
+_start_*.bat
+*.log

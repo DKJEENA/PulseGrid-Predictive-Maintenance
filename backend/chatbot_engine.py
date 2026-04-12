@@ -78,6 +78,16 @@ INTENT_PATTERNS = {
     'trend': [
         r'\b(trend|trending|pattern|over time|changing|increasing|decreasing)\b',
     ],
+    'correlation': [
+        r'\b(correlat|relationship|related|associated|linked|connect)\b',
+    ],
+    'comparison': [
+        r'\b(compare|comparison|vs|versus|differ|between)\b.*\b(machine|cnc|lathe|mill|press)\b',
+        r'\b(machine|cnc|lathe|mill|press)\b.*\b(vs|versus|compare|differ)\b',
+    ],
+    'what_if': [
+        r'\b(what if|what would|hypothetical|simulate|scenario|predict if)\b',
+    ],
 }
 
 # ===========================================================================
@@ -175,6 +185,9 @@ class ChatbotEngine:
             'distribution': self._handle_distribution,
             'recommendation': self._handle_recommendation,
             'trend': self._handle_trend,
+            'correlation': self._handle_correlation,
+            'comparison': self._handle_comparison,
+            'what_if': self._handle_what_if,
         }
         
         handler = handlers.get(intent, self._handle_unknown)
@@ -646,8 +659,159 @@ I analyze the uploaded dataset directly — no external API needed!""",
                         f"- **\"How many failures are there?\"**\n"
                         f"- **\"Which machines are at risk?\"**\n"
                         f"- **\"Show me a dataset summary\"**\n"
-                        f"- **\"What maintenance do you recommend?\"**\n\n"
+                        f"- **\"Is temperature correlated with failure?\"**\n"
+                        f"- **\"What if RPM goes to 3000?\"**\n\n"
                         f"Type **\"help\"** for a full list of capabilities.",
+            'type': 'text',
+            'data': None
+        }
+    
+    def _handle_correlation(self, query: str, ctx: Dict = None) -> Dict:
+        """Analyze correlation between sensor features and machine failure."""
+        err = self._check_dataset()
+        if err:
+            return err
+        
+        if 'Machine failure' not in self.df.columns:
+            return {'response': "No 'Machine failure' column found for correlation analysis.", 'type': 'text', 'data': None}
+        
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        correlations = []
+        
+        for col in numeric_cols:
+            if col in ['UDI', 'Machine failure', 'TWF', 'HDF', 'PWF', 'OSF', 'RNQF']:
+                continue
+            corr = self.df[col].corr(self.df['Machine failure'])
+            if not np.isnan(corr):
+                strength = 'Strong' if abs(corr) > 0.3 else ('Moderate' if abs(corr) > 0.1 else 'Weak')
+                direction = '↑ Positive' if corr > 0 else '↓ Negative'
+                correlations.append({
+                    'Feature': col,
+                    'Correlation': f"{corr:.4f}",
+                    'Strength': strength,
+                    'Direction': direction,
+                })
+        
+        # Sort by absolute correlation strength
+        correlations.sort(key=lambda x: abs(float(x['Correlation'])), reverse=True)
+        
+        if correlations:
+            top = correlations[0]
+            return {
+                'response': f"📊 **Correlation Analysis with Machine Failure**\n\nThe strongest predictor is **{top['Feature']}** (r={top['Correlation']}).\n\nFull correlation table:",
+                'type': 'table',
+                'data': correlations
+            }
+        
+        return {'response': "Unable to compute correlations with the current dataset.", 'type': 'text', 'data': None}
+    
+    def _handle_comparison(self, query: str, ctx: Dict = None) -> Dict:
+        """Compare two machines based on real-time context data."""
+        if not ctx or 'machines' not in ctx or len(ctx['machines']) < 2:
+            return {
+                'response': "📊 I need at least 2 active machines to compare. Please run the simulator with multiple machines and try again.",
+                'type': 'text',
+                'data': None
+            }
+        
+        machines = ctx['machines']
+        comparison = []
+        for m in machines:
+            health = m.get('health_score', 0)
+            status = '🟢 Healthy' if health > 0.7 else ('🟡 Warning' if health > 0.4 else '🔴 Critical')
+            comparison.append({
+                'Machine': m.get('machine_id', '?'),
+                'Health': f"{health:.0%}",
+                'Status': status,
+                'Temp (K)': f"{m.get('air_temp', 0):.1f}",
+                'RPM': f"{m.get('rpm', 0):.0f}",
+                'Torque (Nm)': f"{m.get('torque', 0):.1f}",
+                'Wear (min)': f"{m.get('tool_wear', 0):.0f}",
+                'Risk': '⚠️ YES' if m.get('failure_risk') else '✅ No',
+            })
+        
+        # Find best and worst
+        sorted_m = sorted(machines, key=lambda x: x.get('health_score', 0))
+        worst = sorted_m[0]
+        best = sorted_m[-1]
+        
+        summary = f"**Best performer:** {best.get('machine_id')} ({best.get('health_score', 0):.0%}) | "
+        summary += f"**Needs attention:** {worst.get('machine_id')} ({worst.get('health_score', 0):.0%})"
+        
+        return {
+            'response': f"📊 **Machine Comparison** ({len(machines)} machines)\n\n{summary}",
+            'type': 'table',
+            'data': comparison
+        }
+    
+    def _handle_what_if(self, query: str, ctx: Dict = None) -> Dict:
+        """Simulate a hypothetical sensor scenario and predict risk."""
+        err = self._check_dataset()
+        if err:
+            return err
+        
+        # Extract numbers from query
+        numbers = re.findall(r'(\d+\.?\d*)', query)
+        
+        # Build a hypothetical scenario from query context
+        scenarios = []
+        
+        if 'rpm' in query and numbers:
+            rpm_val = float(numbers[0])
+            # Find historical failure rates at similar RPM
+            if 'Rotational speed [rpm]' in self.df.columns and 'Machine failure' in self.df.columns:
+                similar = self.df[
+                    (self.df['Rotational speed [rpm]'] >= rpm_val - 100) &
+                    (self.df['Rotational speed [rpm]'] <= rpm_val + 100)
+                ]
+                if len(similar) > 0:
+                    failure_rate = similar['Machine failure'].mean()
+                    scenarios.append(f"At RPM ≈ {rpm_val:.0f}, historical failure rate is **{failure_rate:.1%}** (based on {len(similar)} samples)")
+                else:
+                    scenarios.append(f"No historical data found for RPM ≈ {rpm_val:.0f}. This is outside the training range.")
+        
+        if 'temp' in query and numbers:
+            temp_val = float(numbers[-1])  # Take last number if multiple
+            if 'Air temperature [K]' in self.df.columns and 'Machine failure' in self.df.columns:
+                similar = self.df[
+                    (self.df['Air temperature [K]'] >= temp_val - 2) &
+                    (self.df['Air temperature [K]'] <= temp_val + 2)
+                ]
+                if len(similar) > 0:
+                    failure_rate = similar['Machine failure'].mean()
+                    scenarios.append(f"At temperature ≈ {temp_val:.1f}K, historical failure rate is **{failure_rate:.1%}** (based on {len(similar)} samples)")
+        
+        if 'torque' in query and numbers:
+            torque_val = float(numbers[-1])
+            if 'Torque [Nm]' in self.df.columns and 'Machine failure' in self.df.columns:
+                similar = self.df[
+                    (self.df['Torque [Nm]'] >= torque_val - 5) &
+                    (self.df['Torque [Nm]'] <= torque_val + 5)
+                ]
+                if len(similar) > 0:
+                    failure_rate = similar['Machine failure'].mean()
+                    scenarios.append(f"At torque ≈ {torque_val:.1f}Nm, historical failure rate is **{failure_rate:.1%}** (based on {len(similar)} samples)")
+        
+        if 'wear' in query and numbers:
+            wear_val = float(numbers[-1])
+            if 'Tool wear [min]' in self.df.columns and 'Machine failure' in self.df.columns:
+                similar = self.df[
+                    (self.df['Tool wear [min]'] >= wear_val - 10) &
+                    (self.df['Tool wear [min]'] <= wear_val + 10)
+                ]
+                if len(similar) > 0:
+                    failure_rate = similar['Machine failure'].mean()
+                    scenarios.append(f"At tool wear ≈ {wear_val:.0f} min, historical failure rate is **{failure_rate:.1%}** (based on {len(similar)} samples)")
+        
+        if not scenarios:
+            return {
+                'response': "🔮 **What-If Analysis**\n\nPlease specify a sensor and value, for example:\n- *\"What if RPM goes to 3000?\"*\n- *\"What if temperature reaches 310K?\"*\n- *\"What if torque is 70Nm?\"*\n- *\"What if tool wear reaches 230?\"*",
+                'type': 'text',
+                'data': None
+            }
+        
+        return {
+            'response': f"🔮 **What-If Scenario Analysis**\n\n" + '\n\n'.join(scenarios),
             'type': 'text',
             'data': None
         }

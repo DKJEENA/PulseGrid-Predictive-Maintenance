@@ -1,69 +1,96 @@
-# Industry Predictive Maintenance Platform
+# PulseGrid — Predictive Maintenance Platform
 
-An end-to-end college project demonstrating an Industrial IoT predicting maintenance platform using real-world data (AI4I dataset). 
+An end-to-end Industrial IoT predictive maintenance platform using the AI4I 2020 dataset.  
+Built with **FastAPI**, **React + Vite**, **Scikit-Learn**, and **WebSocket** real-time telemetry.
+
+---
 
 ## 📁 Repository Structure
-- `/backend`: FastAPI Python server to handle endpoints, dataset uploading, and integration with the ML model.
-- `/frontend`: React + Vite dashboard mimicking a real industry control screen with dark mode aesthetics.
-- `/dataset`: Area containing the raw `ai4i2020.csv` dataset and download scripts.
-- `/ml`: Scikit-Learn Machine Learning pipeline that auto-cleans dataset and trains a Random Forest failure classifier.
-- `/simulator`: Python script `client.py` that mimics edge machinery sending realtime MQTT/HTTP sensor data.
 
-## 🚀 Step-by-Step Guide to Run Locally
+| Directory | Description |
+|-----------|-------------|
+| `/backend` | FastAPI server — ML inference, alerts, chatbot, WebSocket broadcasts, data pipeline |
+| `/frontend` | React + Vite dashboard — 7-tab glassmorphism UI with real-time charts |
+| `/ml` | Scikit-Learn Random Forest pipeline with cross-validation and feature importance |
+| `/simulator` | IoT device simulator with fault injection, degradation modeling, and retry logic |
+| `/dataset` | Raw `ai4i2020.csv` dataset and download scripts |
 
-### 1. Pre-requisites
-You need **Python 3.10+** and **Node.js 18+** installed on your system.
+## ✨ Key Features (v2.1)
 
-### 2. Download and Setup
-Open your terminal in the root directory:
+- **ML Pipeline**: 5-fold stratified CV, AUC-ROC, feature importance extraction
+- **Real-time Monitoring**: WebSocket live telemetry, auto-refresh with countdown timer
+- **AI Chatbot**: NLP queries + correlation analysis, what-if scenarios, machine comparison
+- **Alert Engine**: Rule-based + ML alerts with severity levels and auto-resolution
+- **Data Pipeline**: Automated cleaning, imputation, outlier detection on upload
+- **Rate Limiting**: Per-machine rate limiting on ingestion endpoint
+- **Health Check**: `/api/health` verifies DB, ML model, and dataset status
+- **CSV Export**: Download historical sensor data from the Machine Detail view
+- **Docker**: Health checks, env file support, service dependency ordering
+- **CI/CD**: GitHub Actions for lint + build on push
 
-**Step A: Get the dataset and Train the Model**
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Python 3.10+** and **Node.js 18+**
+
+### 1. Install & Train
 ```bash
-# Install Python dependencies
 pip install -r requirements.txt
-
-# Run the data fetcher
 python dataset/fetch_dataset.py
-
-# Train the ML Model (Auto-Cleans data and exports model)
 python ml/train_model.py
 ```
 
-**Step B: Start the Backend (Terminal 1)**
+### 2. Start Backend (Terminal 1)
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-**Step C: Start the Frontend UI (Terminal 2)**
+### 3. Start Frontend (Terminal 2)
 ```bash
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && npm run dev
 ```
--> Open your browser to `http://localhost:5173`
+→ Open `http://localhost:5173`
 
-**Step D: Start the Simulator (Terminal 3)**
-To see the dashboard start moving with live sensors!
+### 4. Start Simulator (Terminal 3)
 ```bash
-python simulator/client.py
+python simulator/client.py --machines 5 --speed 1
 ```
 
-## 🔄 How to Change the Dataset
-The code is built to automatically handle missing data and swap contexts seamlessly.
-1. Go to the **React Dashboard** in your browser.
-2. Find the yellow-highlighted **Dataset Configuration Area**.
-3. Upload a new formatted CSV (e.g., your own machinery dataset).
-4. **Automagically:** The FastAPI server will overwrite the old `ai4i2020.csv`, trigger `train_model.py` in the background, clean the data via its Imputer Pipeline, and save the updated `.joblib` model!
+## ⚙️ Configuration
 
-## 🎥 Presentation 
-To automatically generate the PowerPoint presentation for your college class:
-```bash
-python generate_ppt.py
-```
-A `.pptx` file will be generated in your folder.
+Copy `.env.example` to `.env` and adjust:
 
-## 🛳 Docker Method (Alternative Single-Click approach)
-If you have Docker Desktop installed, you can skip steps A-D and simply run:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | CORS allowed origins |
+| `DATA_RETENTION_DAYS` | `30` | Auto-cleanup threshold |
+| `RATE_LIMIT_PER_SECOND` | `10` | Max ingestion requests per machine/s |
+| `DATASET_PATH` | `dataset/ai4i2020.csv` | Active dataset path |
+| `PULSEGRID_API_URL` | `http://localhost:8000` | Simulator target (env or `--api-url`) |
+
+## 🔄 Dataset Hot-Swap
+
+1. Go to the **Data & Models** tab in the dashboard
+2. Upload a new CSV file
+3. The backend will auto-clean → retrain → hot-reload the model
+
+## 🛳 Docker
+
 ```bash
 docker-compose up --build
 ```
+
+## 📊 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | System health check |
+| `/api/machines` | GET | List all machines |
+| `/api/simulate` | POST | Ingest sensor reading |
+| `/api/alerts` | GET | Get active alerts |
+| `/api/chatbot` | POST | AI assistant query |
+| `/api/model/metrics` | GET | ML model performance |
+| `/api/upload_dataset` | POST | Upload new dataset |
+| `/api/admin/cleanup` | POST | Prune old data |

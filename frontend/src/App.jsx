@@ -26,11 +26,13 @@ import AlertCenter from './AlertCenter';
 import AIChatbot from './AIChatbot';
 import DataModels from './DataModels';
 import Calibration from './Calibration';
+import IoTDevices from './IoTDevices';
+import ManualDevice from './ManualDevice';
 import axios from 'axios';
 
 import {
   Cpu, LayoutDashboard, TrendingUp, Bell,
-  Bot, Database, Settings, Activity
+  Bot, Database, Settings, Activity, Radio, Laptop
 } from 'lucide-react';
 
 // --- API base URL (change for production) ---
@@ -42,6 +44,8 @@ const API = 'http://localhost:8000';
  */
 const TABS = [
   { id: 'overview', label: 'Fleet Overview', icon: LayoutDashboard, title: 'Real-Time Fleet Monitoring' },
+  { id: 'iot', label: 'IoT Devices', icon: Radio, title: 'Live IoT Edge Devices' },
+  { id: 'demo', label: 'Demo Device', icon: Laptop, title: 'Manual Demo Device - LAPTOP-01' },
   { id: 'detail', label: 'Machine Detail', icon: Cpu, title: 'Machine Deep Dive' },
   { id: 'trends', label: 'Trend Analysis', icon: TrendingUp, title: 'Sensor Trend Analysis' },
   { id: 'alerts', label: 'Alert Center', icon: Bell, title: 'Maintenance Alerts' },
@@ -98,6 +102,10 @@ function App() {
     switch (activeTab) {
       case 'overview':
         return <Dashboard onMachineSelect={handleMachineSelect} />;
+      case 'iot':
+        return <IoTDevices />;
+      case 'demo':
+        return <ManualDevice />;
       case 'detail':
         return (
           <MachineDetail

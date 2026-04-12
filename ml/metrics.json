@@ -25,7 +25,7 @@
     "Temp_Delta",
     "Power"
   ],
-  "trained_at": "2026-04-03T17:52:01.150682",
+  "trained_at": "2026-04-12T12:49:49.123658",
   "training_samples": 8000,
   "test_samples": 2000
 }

@@ -16,7 +16,10 @@ import pandas as pd
 import numpy as np
 import os
 import json
+import logging
 from typing import Dict, Any, Optional, Tuple
+
+logger = logging.getLogger("pulsegrid.ml")
 
 # ---------------------------------------------------------------------------
 # Path configuration
@@ -34,9 +37,9 @@ def _load_model():
     global model
     try:
         model = joblib.load(MODEL_PATH)
-        print(f"[OK] ML model loaded from {MODEL_PATH}")
+        logger.info(f"ML model loaded from {MODEL_PATH}")
     except Exception as e:
-        print(f"[WARN] Error loading model: {e}. Run train_model.py first.")
+        logger.warning(f"Error loading model: {e}. Run train_model.py first.")
         model = None
 
 # Initial load
@@ -136,7 +139,7 @@ def get_model_metrics() -> Dict[str, Any]:
                 saved = json.load(f)
             result.update(saved)
         except Exception as e:
-            print(f"[WARN] Could not load metrics: {e}")
+            logger.warning(f"Could not load metrics: {e}")
     
     # Add feature names from model if available
     if model is not None:

@@ -1,0 +1,20 @@
+﻿============================================================
+PREDICTIVE MAINTENANCE ù MODEL TRAINING
+============================================================
+python : Traceback (most recent call last):
+At line:1 char:1
++ python ml/train_model.py 2>&1 | Out-File -FilePath "d:\Predictive_Mai ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\Predictive_Maintenance_Platform\ml\train_model.py", line 241, in <module>
+    train()
+    ~~~~~^^
+  File "D:\Predictive_Maintenance_Platform\ml\train_model.py", line 58, in train
+    print(f"\n\U0001f4c1 Loading dataset from: {DATASET_PATH}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4c1' in position 2: character maps to <undefined>
